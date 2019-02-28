@@ -61,6 +61,23 @@ def parse_rec_with_keypoint(filename, im_path):
     objects.append(obj_struct)
     # print(objects)
     return objects
+def cal_IOU(gt, pre):
+    x1, y1, x2, y2 = pre
+    ixmin = np.maximum(gt[0], int(x1))
+    iymin = np.maximum(gt[1], int(y1))
+    ixmax = np.minimum(gt[2], int(x2))
+    iymax = np.minimum(gt[3], int(y2))
+    iw = np.maximum(ixmax - ixmin + 1., 0.)
+    ih = np.maximum(iymax - iymin + 1., 0.)
+    inters = iw * ih
+
+    # union
+    uni = ((int(x2) - int(x1) + 1.) * (int(y2) - int(y1) + 1.) +
+            (gt[2] - gt[0] + 1.) *
+            (gt[3] - gt[1] + 1.) - inters)
+
+    overlaps = inters / uni
+    return overlaps
 
 class Roidata(object):
 
@@ -70,8 +87,8 @@ class Roidata(object):
         self.data_path = os.path.join(self.devkit_path, 'VOC2007')
         self.anno_pre = os.path.join(self.data_path, 'Keypoints', '{:s}.txt')
         self.img_pre = os.path.join(self.data_path, 'JPEGImages', '{:s}.jpg')
-        self.cache_file = 'zebrish_yolo_143000.pkl'
-        self.proposal_file = 'zebrish_yolo_143000.txt'
+        self.cache_file = 'zebrish_yolo_143000_refine_smaller_with_gap.pkl'
+        self.proposal_file = 'zebrish_yolo_143000_refine_smaller_with_gap.txt'
         self.batch_size = cfg.batch_size
         self.cursor = 0
         self.rebuild = rebuild
@@ -170,16 +187,17 @@ class Roidata(object):
             x2 = max(int(x2), 0)
             y2 = max(int(y2), 0)
             proposal = [int(x1), int(y1), int(x2), int(y2)]
-
-            targets = bbox_transform(np.array([proposal], dtype=np.float32), \
-                                        np.array([gt_boxes], dtype=np.float32))
-            targets = targets / np.array(cfg.BBOX_NORMALIZE_STDS)
-            single_data['img_path'] = img_path
-            single_data['gt_boxes'] = gt_boxes
-            single_data['proposal'] = proposal 
-            single_data['targets'] = targets 
-            single_data['score'] = float(score)
-            self.data.append(single_data)
+            IOU = cal_IOU(gt_boxes, proposal)
+            if IOU < 0.9:
+                targets = bbox_transform(np.array([proposal], dtype=np.float32), \
+                                            np.array([gt_boxes], dtype=np.float32))
+                targets = targets / np.array(cfg.BBOX_NORMALIZE_STDS)
+                single_data['img_path'] = img_path
+                single_data['gt_boxes'] = gt_boxes
+                single_data['proposal'] = proposal 
+                single_data['targets'] = targets 
+                single_data['score'] = float(score)
+                self.data.append(single_data)
         
         np.random.shuffle(self.data)
 
@@ -195,6 +213,7 @@ if __name__ == '__main__':
     print(data)
     proposalnp = np.array([data['proposal']], dtype=np.float32)
     gt_boxesnp = np.array([data['gt_boxes']], dtype=np.float32)
+    # print(proposalnp, gt_boxesnp)
     targets = bbox_transform(proposalnp, gt_boxesnp)
     print(targets)
     # targets = targets / np.array(cfg.BBOX_NORMALIZE_STDS)

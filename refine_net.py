@@ -33,37 +33,65 @@ def decoder_arg_scope(weight_decay = 0.0001, stddev = 0.1, is_training = True, b
                         normalizer_params = batch_norm_params) as sc:
         return sc
 
+# def small_net(inputs, keep_prob, is_training = True, scope = None):
+#     with tf.variable_scope(scope, 'refine_net', [inputs]):
+#         with slim.arg_scope(decoder_arg_scope(is_training = is_training)):
+#             # block1
+#             net = slim.conv2d(inputs, 32, [3, 3], scope = "conv1_1")
+#             net = slim.conv2d(net, 32, [3, 3], scope = 'conv1_2')
+#             net = slim.max_pool2d(net, [2, 2], stride = 2, padding = "SAME", scope = "pool1")
+#             # block2
+#             net = slim.conv2d(net, 64, [3, 3], scope = "conv2_1")
+#             net = slim.conv2d(net, 64, [3, 3], scope = "conv2_2")
+#             net = slim.max_pool2d(net, [2, 2], stride = 2, padding = "SAME", scope = "pool2")
+#             # block3
+#             net = slim.conv2d(net, 128, [3, 3], scope = "conv3_1")            
+#             net = slim.conv2d(net, 128, [3, 3], scope = "conv3_2")           
+#             net = slim.conv2d(net, 128, [3, 3], scope = "conv3_3")
+#             net = slim.max_pool2d(net, [2, 2], stride = 2, padding = "SAME", scope = "pool3")
+#             # block4          
+#             net = slim.conv2d(net, 256, [3, 3], scope = "conv4_1")           
+#             net = slim.conv2d(net, 256, [3, 3], scope = "conv4_2")            
+#             net = slim.conv2d(net, 256, [3, 3], scope = "conv4_3")
+#             net = slim.avg_pool2d(net, 7, scope='gap_5')
+#             net = slim.flatten(net, scope='flat_6')
+#             print(net.shape)
+#             net = slim.fully_connected(net, 256, scope='fc_7')
+#             print(net.shape)
+#             net = slim.fully_connected(net, 4096, scope='fc_8')
+#             net = slim.dropout(
+#                 net, keep_prob=keep_prob, is_training=is_training,
+#                 scope='dropout_9')
+#             net = slim.fully_connected(
+#                 net, cfg.num_outputs, activation_fn=None, scope='fc_10')
+#             return net
+
+
 def small_net(inputs, keep_prob, is_training = True, scope = None):
     with tf.variable_scope(scope, 'refine_net', [inputs]):
         with slim.arg_scope(decoder_arg_scope(is_training = is_training)):
             # block1
             net = slim.conv2d(inputs, 32, [3, 3], scope = "conv1_1")
-            net = slim.conv2d(net, 32, [3, 3], scope = 'conv1_2')
-            net = slim.max_pool2d(net, [2, 2], stride = 2, padding = "SAME", scope = "pool1")
+            net = slim.max_pool2d(net, [3, 3], stride = 2, padding = "SAME", scope = "pool1")
             # block2
             net = slim.conv2d(net, 64, [3, 3], scope = "conv2_1")
-            net = slim.conv2d(net, 64, [3, 3], scope = "conv2_2")
-            net = slim.max_pool2d(net, [2, 2], stride = 2, padding = "SAME", scope = "pool2")
+            net = slim.max_pool2d(net, [3, 3], stride = 2, padding = "SAME", scope = "pool2")
             # block3
             net = slim.conv2d(net, 128, [3, 3], scope = "conv3_1")            
-            net = slim.conv2d(net, 128, [3, 3], scope = "conv3_2")           
-            net = slim.conv2d(net, 128, [3, 3], scope = "conv3_3")
             net = slim.max_pool2d(net, [2, 2], stride = 2, padding = "SAME", scope = "pool3")
             # block4          
             net = slim.conv2d(net, 256, [3, 3], scope = "conv4_1")           
-            net = slim.conv2d(net, 256, [3, 3], scope = "conv4_2")            
-            net = slim.conv2d(net, 256, [3, 3], scope = "conv4_3")
             net = slim.avg_pool2d(net, 7, scope='gap_5')
             net = slim.flatten(net, scope='flat_6')
             print(net.shape)
-            net = slim.fully_connected(net, 256, scope='fc_7')
+            net = slim.fully_connected(net, 512, scope='fc_7')
             print(net.shape)
-            net = slim.fully_connected(net, 4096, scope='fc_8')
+            # net = slim.fully_connected(net, 4096, scope='fc_8')
             net = slim.dropout(
                 net, keep_prob=keep_prob, is_training=is_training,
-                scope='dropout_9')
+                scope='dropout_8')
             net = slim.fully_connected(
-                net, cfg.num_outputs, activation_fn=None, scope='fc_10')
+                net, cfg.num_outputs, activation_fn=None, scope='fc_9')
             return net
 
 def smooth_l1_loss(bbox_pred, bbox_targets, sigma):
@@ -99,7 +127,7 @@ def train():
     tf.summary.scalar('total_loss', total_loss)
     
     # summary operation
-    output_dir = ('output')
+    output_dir = ('samller_output_calibration')
     ckpt_file  = os.path.join(output_dir, 'refine')
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -111,8 +139,8 @@ def train():
     learning_rate = tf.train.exponential_decay(
         cfg.learning_rate, global_step, cfg.decay_steps,
         cfg.decay_rate, True, name='learning_rate')
-    # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    # optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     # train_op = tf.train.MomentumOptimizer(learning_rate, 0.9).minimize(total_loss, global_step=global_step)
     train_op = slim.learning.create_train_op(
         total_loss, optimizer, global_step=global_step
@@ -194,27 +222,30 @@ def test():
 
     logits = small_net(img_ph, 1.0, is_training=False)
 
-    ckpt_file = 'output/refine-100070'
+    ckpt_file = 'samller_output_calibration/refine-31970'
     saver = tf.train.Saver()
     tfconfig = tf.ConfigProto()
     # tfconfig = tf.ConfigProto(allow_soft_placement=True)
     tfconfig.gpu_options.allow_growth = True
-    tfconfig.gpu_options.per_process_gpu_memory_fraction = 1.0       
+    tfconfig.gpu_options.per_process_gpu_memory_fraction = 1.0     
     sess = tf.Session(config=tfconfig)
     sess.run(tf.global_variables_initializer())
     saver.restore(sess, ckpt_file)
 
-    result_file = open('zebrish_yolo_143000_refine.txt', 'w')
+    result_file = open('zebrish_yolo_143000_refine_smaller_with_gap_calibration.txt', 'w')
     test_timer = Timer()
     img, im_path, proposal, gt_boxes, score = roidata.get()
+        # print(proposal, gt_boxes)
     feed_dict = {img_ph:img}
-    for i in range(100):
-        logits_val = sess.run(logits, feed_dict=feed_dict)
-    for i in range(1000):
+    # for i in range(100):
+    #     logits_val = sess.run(logits, feed_dict=feed_dict)
+    for i in range(len(roidata.data)):
         
         # if score < 0.5:
-        
-        
+        img, im_path, proposal, gt_boxes, score = roidata.get()
+        # print(proposal, gt_boxes)
+        feed_dict = {img_ph:img}
+        # cv2.imshow("origin", img[0])
         test_timer.tic()
         logits_val = sess.run(logits, feed_dict=feed_dict)
         test_timer.toc()
@@ -228,17 +259,18 @@ def test():
         # # print(im_path)
         im_index = im_path.split('/')[-1][:-4]
         # # print(im_index)
+        print(pred_gt)
         pred_gt = clip_boxes(pred_gt, [origin_img.shape[0], origin_img.shape[1]])[0].astype(np.int32)
         
-        # result_file.write('{:s} {:.4f} {:d} {:d} {:d} {:d}\n'.format(
-        #     im_index, score, pred_gt[0], pred_gt[1], pred_gt[2], pred_gt[3]))
+        result_file.write('{:s} {:.4f} {:d} {:d} {:d} {:d}\n'.format(
+            im_index, score, pred_gt[0], pred_gt[1], pred_gt[2], pred_gt[3]))
 
 
-        # cv2.rectangle(origin_img, (proposal[0], proposal[1]), (proposal[2], proposal[3]), (255, 0, 0))
-        # cv2.rectangle(origin_img, (gt_boxes[0], gt_boxes[1]), (gt_boxes[2], gt_boxes[3]), (0, 255, 0))
-        # cv2.rectangle(origin_img, (pred_gt[0], pred_gt[1]), (pred_gt[2], pred_gt[3]), (0, 0, 255))
-        # cv2.imshow("test", origin_img)
-        # cv2.waitKey(0)
+        cv2.rectangle(origin_img, (proposal[0], proposal[1]), (proposal[2], proposal[3]), (255, 0, 0))
+        cv2.rectangle(origin_img, (gt_boxes[0], gt_boxes[1]), (gt_boxes[2], gt_boxes[3]), (0, 255, 0))
+        cv2.rectangle(origin_img, (pred_gt[0], pred_gt[1]), (pred_gt[2], pred_gt[3]), (0, 0, 255))
+        cv2.imshow("test", origin_img)
+        cv2.waitKey(0)
 
     
 
